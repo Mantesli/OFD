@@ -1,0 +1,199 @@
+# Oil Field Leak Detection Configuration
+# ========================================
+
+# Data settings
+data:
+  # Image dimensions after preprocessing
+  image_size: [384, 384]
+  
+  # How RGB and IR are combined in source video
+  # Options: "horizontal" (side by side), "vertical" (top-bottom)
+  split_mode: "horizontal"
+  
+  # Which side is RGB when split_mode is horizontal
+  # Options: "left", "right"
+  rgb_position: "right"
+  
+  # Video settings
+  video:
+    fps: 120                    # Source video FPS
+    sample_interval: 30         # Sample every N frames (120fps/30 = 4 samples/sec)
+  
+  # Dataset split ratios
+  split:
+    train: 0.7
+    val: 0.15
+    test: 0.15
+  
+  # Class distribution for sampling
+  sampling:
+    num_leak_train: 160
+    num_normal_train: 1600
+    num_leak_val: 20
+    num_normal_val: 600
+    num_leak_test: 20
+    num_normal_test: 600
+
+# Model settings
+model:
+  # MobileCLIP variant
+  # Options: "mobileclip_s0", "mobileclip_s1", "mobileclip_s2", "mobileclip_b"
+  clip_model: "mobileclip_s0"
+  
+  # Feature dimensions
+  clip_feature_dim: 512
+  thermal_feature_dim: 64
+  
+  # Fusion method
+  # Options: "concat", "attention", "cross_attention"
+  fusion_method: "concat"
+  
+  # Classifier architecture
+  classifier:
+    hidden_dims: [256, 128]
+    dropout: 0.3
+
+# Semantic prompts for CLIP
+prompts:
+  # Positive prompts (indicate leak)
+  positive:
+    - "oil spill on ground"
+    - "oil leakage"
+    - "dark liquid spill"
+    - "petroleum leak on soil"
+    - "oil contamination"
+  
+  # Negative prompts (interference sources)
+  negative:
+    - "dark soil"
+    - "bare ground"
+    - "shadow on ground"
+    - "black earth"
+    - "tire tracks"
+    - "vehicle tracks on snow"
+    - "metal equipment"
+    - "oil pump station"
+    - "dry grass"
+    - "dead vegetation"
+
+# Thermal texture feature settings
+thermal_features:
+  # Local Binary Pattern settings
+  lbp:
+    radius: 3
+    n_points: 24
+    method: "uniform"
+  
+  # Statistical features
+  statistics:
+    window_size: 32           # Local window for statistics
+    compute_variance: true
+    compute_entropy: true
+    compute_gradient: true
+  
+  # Connected component analysis
+  connected_components:
+    min_area: 100             # Minimum area in pixels
+    max_area: 50000           # Maximum area in pixels
+
+# Training settings
+training:
+  # Basic training params
+  batch_size: 16
+  num_epochs: 50
+  learning_rate: 1.0e-4
+  weight_decay: 1.0e-5
+  
+  # Learning rate scheduler
+  scheduler:
+    type: "cosine"            # Options: "cosine", "step", "plateau"
+    warmup_epochs: 5
+  
+  # Loss function
+  loss:
+    type: "focal"             # Options: "focal", "bce", "weighted_bce"
+    focal_gamma: 2.0          # Focal loss gamma parameter
+    focal_alpha: 0.75         # Focal loss alpha parameter
+  
+  # Class imbalance handling
+  pos_weight: 10.0            # Weight for positive (leak) class
+  
+  # Data augmentation
+  augmentation:
+    horizontal_flip: true
+    vertical_flip: true
+    rotation: 15              # Max rotation angle in degrees
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.1
+    random_crop: true
+    crop_scale: [0.8, 1.0]
+  
+  # Early stopping
+  early_stopping:
+    patience: 10
+    metric: "recall"          # Monitor recall for early stopping
+    mode: "max"
+
+# Inference settings
+inference:
+  # Decision threshold (lower = higher recall, more false positives)
+  threshold: 0.3
+  
+  # Temporal smoothing with EMA
+  temporal:
+    enabled: true
+    ema_alpha: 0.7            # EMA coefficient (higher = more weight on current frame)
+    min_consecutive_frames: 3  # Minimum frames to confirm detection
+  
+  # Post-processing
+  postprocess:
+    min_area: 200             # Minimum detection area in pixels
+    morphology_kernel: 5      # Kernel size for morphological operations
+
+# Evaluation settings
+evaluation:
+  # Primary metrics (in order of importance)
+  primary_metrics:
+    - "recall"
+    - "accuracy"
+    - "precision"
+    - "f1"
+  
+  # Target thresholds
+  targets:
+    recall: 0.85
+    accuracy: 0.80
+    precision: 0.60
+    f1: 0.70
+  
+  # Confusion matrix categories to track
+  track_categories:
+    - "true_leak"
+    - "false_leak_dark_soil"
+    - "false_leak_equipment"
+    - "false_leak_tracks"
+    - "missed_leak"
+
+# Paths (override in command line or environment)
+paths:
+  data_root: "./data"
+  video_dir: "./data/videos"
+  output_dir: "./outputs"
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Hardware settings
+hardware:
+  device: "cuda"              # Options: "cuda", "cpu", "mps"
+  num_workers: 4
+  pin_memory: true
+  mixed_precision: true       # Use AMP for faster training
+
+# Logging settings
+logging:
+  level: "INFO"
+  save_predictions: true
+  save_visualizations: true
+  visualization_interval: 100  # Save visualization every N batches
